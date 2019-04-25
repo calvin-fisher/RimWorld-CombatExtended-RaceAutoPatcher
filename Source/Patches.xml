@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Patch>
+  <Operation Class="PatchOperationAddModExtension">
+    <xpath>*/AlienRace.ThingDef_AlienRace[defName="AlienBatarian"]</xpath>
+    <value>
+      <li Class="CombatExtended.RacePropertiesExtensionCE">
+        <bodyShape>Humanoid</bodyShape>
+      </li>
+    </value>
+  </Operation>
+
+  <Operation Class="PatchOperationAdd">
+    <xpath>*/AlienRace.ThingDef_AlienRace[defName="AlienBatarian"]/statBases</xpath>
+    <value>
+      <AimingAccuracy>1</AimingAccuracy>
+      <MeleeCritChance>1</MeleeCritChance>
+      <MeleeParryChance>1</MeleeParryChance>
+      <ReloadSpeed>1</ReloadSpeed>
+    </value>
+  </Operation>
+
+  <Operation Class="PatchOperationReplace">
+    <xpath>*/AlienRace.ThingDef_AlienRace[defName="AlienBatarian"]/tools</xpath>
+    <value>
+      <tools>
+        <li Class="CombatExtended.ToolCE">
+          <label>left fist</label>
+          <capacities>
+            <li>Blunt</li>
+          </capacities>
+          <power>4</power>
+          <cooldownTime>2</cooldownTime>
+          <linkedBodyPartsGroup>LeftHand</linkedBodyPartsGroup>
+          <armorPenetration>0.10</armorPenetration>
+        </li>
+        <li Class="CombatExtended.ToolCE">
+          <label>right fist</label>
+          <capacities>
+            <li>Blunt</li>
+          </capacities>
+          <power>4</power>
+          <cooldownTime>2</cooldownTime>
+          <linkedBodyPartsGroup>RightHand</linkedBodyPartsGroup>
+          <armorPenetration>0.10</armorPenetration>
+        </li>
+        <li Class="CombatExtended.ToolCE">
+          <label>head</label>
+          <capacities>
+            <li>Blunt</li>
+          </capacities>
+          <power>6</power>
+          <cooldownTime>3</cooldownTime>
+          <linkedBodyPartsGroup>HeadAttackTool</linkedBodyPartsGroup>
+          <chanceFactor>0.2</chanceFactor>
+          <surpriseAttack>
+            <extraMeleeDamages>
+              <li>
+                <def>Stun</def>
+                <amount>10</amount>
+              </li>
+            </extraMeleeDamages>
+          </surpriseAttack>
+          <armorPenetration>0.10</armorPenetration>
+        </li>
+      </tools>
+    </value>
+  </Operation>
+
+  <Operation Class="PatchOperationSequence">
+    <success>Always</success>
+    <operations>
+      <li Class="PatchOperationTest">
+        <xpath>*/AlienRace.ThingDef_AlienRace[defName="AlienBatarian"]/comps</xpath>
+        <success>Invert</success>
+      </li>
+      <li Class="PatchOperationAdd">
+        <xpath>*/AlienRace.ThingDef_AlienRace[defName="AlienBatarian"]</xpath>
+        <value>
+          <comps />
+        </value>
+      </li>
+    </operations>
+  </Operation>
+
+  <Operation Class="PatchOperationAdd">
+    <xpath>*/AlienRace.ThingDef_AlienRace[defName="AlienBatarian"]/comps</xpath>
+    <value>
+      <li>
+        <compClass>CombatExtended.CompPawnGizmo</compClass>
+      </li>
+      <li Class="CombatExtended.CompProperties_Suppressable" />
+    </value>
+  </Operation>
+</Patch>
