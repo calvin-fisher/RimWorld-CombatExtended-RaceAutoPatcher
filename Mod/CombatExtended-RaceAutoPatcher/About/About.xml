@@ -3,7 +3,7 @@
   <name>CE Race Auto-Patcher</name>
   <author>AndHobbes</author>
   <supportedVersions>
-    <li>1.0</li>
+    <li>1.1</li>
   </supportedVersions>
   <description>
 Combat Extended doesn't work right with extra races unless the authors provide a patch, but most don't have one. However, most of those patches are pretty simple, so this mod provides some sensible defaults for races that aren't patched for CE.
