@@ -13,17 +13,18 @@ namespace CombatExtendedRaceAutoPatcher
         const string ModName = "CombatExtended-RaceAutoPatcher";
         public override string ModIdentifier => ModName;
 
-        private StringBuilder trace;
+        private readonly StringBuilder trace = new StringBuilder();
+
+        private BodyShapeDef humanoidBodyShapeDef;
+        private StatDef[] combatExtendedStatBases;
 
         public override void DefsLoaded()
         {
             if (!ModIsActive)
                 return;
 
-            trace = new StringBuilder();
             try
             {
-                //PatchVanillaRaces();
                 PatchAliens();
             }
             catch (Exception ex)
@@ -33,40 +34,6 @@ namespace CombatExtendedRaceAutoPatcher
             finally
             {
                 Logger.Message(trace.ToString());
-            }
-        }
-
-        private void PatchVanillaRaces()
-        {
-            trace.AppendLine();
-            trace.AppendLine("INITIALIZING VANILLA CE RACES");
-
-            var combatExtendedStatBases = new[]
-                {
-                    CE_StatDefOf.MeleeCritChance,
-                    CE_StatDefOf.MeleeParryChance,
-                };
-            trace.AppendLine("Loaded CE stat defs");
-
-            var allVanillaRaces = DefDatabase<ThingDef>.AllDefsListForReading
-                .Where(x => x.race != null)
-                .ToList();
-
-            trace.AppendLine($"Found {allVanillaRaces.Count} vanilla race defs");
-            foreach (var def in allVanillaRaces)
-            {
-                trace.AppendLine($"***** Processing race {def} *****");
-
-                if (!def.HasModExtension<RacePropertiesExtensionCE>())
-                {
-                    trace.AppendLine("Missing CE race properties");
-                    var bodyShape = GetVanillaRaceBodyShape(def);
-                    if (bodyShape != null)
-                    {
-                        trace.AppendLine($"Using body shape {bodyShape}");
-
-                    }
-                }
             }
         }
 
@@ -94,7 +61,7 @@ namespace CombatExtendedRaceAutoPatcher
             trace.AppendLine();
             trace.AppendLine("INITIALIZING ALIEN CE RACES");
 
-            var humanoidBodyShapeDef = DefDatabase<BodyShapeDef>.AllDefsListForReading.FirstOrDefault(x => x.defName == "Humanoid");
+            humanoidBodyShapeDef = DefDatabase<BodyShapeDef>.AllDefsListForReading.FirstOrDefault(x => x.defName == "Humanoid");
             if (humanoidBodyShapeDef == null)
             {
                 Logger.Error("Could not find humanoid body shape def");
@@ -102,13 +69,15 @@ namespace CombatExtendedRaceAutoPatcher
             }
             trace.AppendLine("Loaded CE Humanoid body shape");
 
-            var combatExtendedStatBases = new[]
+            combatExtendedStatBases = new[]
             {
-                    CE_StatDefOf.AimingAccuracy,
-                    CE_StatDefOf.MeleeCritChance,
-                    CE_StatDefOf.MeleeParryChance,
-                    CE_StatDefOf.ReloadSpeed,
-                };
+                CE_StatDefOf.AimingAccuracy,
+                CE_StatDefOf.MeleeDodgeChance,
+                CE_StatDefOf.MeleeCritChance,
+                CE_StatDefOf.MeleeParryChance,
+                CE_StatDefOf.ReloadSpeed,
+                CE_StatDefOf.Suppressability,
+            };
             trace.AppendLine("Loaded CE stat defs");
 
             var allAlienRaces = DefDatabase<AlienRace.ThingDef_AlienRace>.AllDefs.ToList();
@@ -117,91 +86,148 @@ namespace CombatExtendedRaceAutoPatcher
             foreach (var race in allAlienRaces)
             {
                 trace.AppendLine($"***** Processing race {race} *****");
-                // TODO: Root body part hit points increased by 25%?
 
-                // RaceDef CombatExtended.RacePropertiesExtensionCE bodyShape humanoid
-                if (!race.HasModExtension<RacePropertiesExtensionCE>())
+                SetHumanoidBodyShape(race);
+                SetSuppressable(race);
+                SetDefaultStatBases(race);
+                ReplaceTools(race);
+            }
+        }
+
+        private void SetHumanoidBodyShape(AlienRace.ThingDef_AlienRace race)
+        {
+            // RaceDef CombatExtended.RacePropertiesExtensionCE bodyShape humanoid
+            if (!race.HasModExtension<RacePropertiesExtensionCE>())
+            {
+                trace.AppendLine("* Adding body shape mod extension");
+                var extension = new RacePropertiesExtensionCE { bodyShape = humanoidBodyShapeDef };
+                trace.AppendLine("Initialized mod extension");
+                if (race.modExtensions == null)
                 {
-                    trace.AppendLine("* Adding body shape mod extension");
-                    var extension = new RacePropertiesExtensionCE { bodyShape = humanoidBodyShapeDef };
-                    trace.AppendLine("Initialized mod extension");
-                    if (race.modExtensions == null)
-                    {
-                        race.modExtensions = new List<DefModExtension>();
-                        trace.AppendLine("Initialized mod extension list");
-                    }
-                    race.modExtensions.Add(extension);
-                    trace.AppendLine($"Added humanoid body shape to race def");
+                    race.modExtensions = new List<DefModExtension>();
+                    trace.AppendLine("Initialized mod extension list");
                 }
+                race.modExtensions.Add(extension);
+                trace.AppendLine($"Added humanoid body shape to race def");
+            }
+        }
 
-                // statbases @ 1
-                foreach (var statDef in combatExtendedStatBases)
+        private void SetSuppressable(AlienRace.ThingDef_AlienRace race)
+        {
+            // comps element?
+            if (race.comps == null)
+            {
+                trace.AppendLine("* Adding missing comps list");
+                race.comps = new List<CompProperties>();
+            }
+
+            // compclass CombatExtended.CompPawnGizmo
+            if (!race.comps.Any(x => x.compClass == typeof(CompPawnGizmo)))
+            {
+                trace.AppendLine("* Adding CompPawnGizmo to comps list");
+
+                var gizmoProp = new CompProperties { compClass = typeof(CompPawnGizmo) };
+                trace.AppendLine("Initialized gizmo prop");
+
+                race.comps.Add(gizmoProp);
+                trace.AppendLine("Added gizmo to comps");
+            }
+
+            // CombatExtended.CompProperties_Suppressable
+            if (!race.comps.OfType<CompProperties_Suppressable>().Any())
+            {
+                trace.AppendLine("* Adding supressable to comps list");
+
+                var suppressableProps = new CompProperties_Suppressable();
+                trace.AppendLine("Initialized supressable prop");
+
+                race.comps.Add(suppressableProps);
+                trace.AppendLine("Added supressable to comps");
+            }
+        }
+
+        private void SetDefaultStatBases(AlienRace.ThingDef_AlienRace race)
+        {
+            // statbases @ 1
+            foreach (var statDef in combatExtendedStatBases)
+            {
+                var existing = race.statBases.FirstOrDefault(x => x.stat == statDef);
+                if (existing == null)
                 {
-                    var existing = race.statBases.FirstOrDefault(x => x.stat == statDef);
-                    if (existing == null)
-                    {
-                        trace.AppendLine($"* Adding default {statDef} stat");
-                        race.statBases.Add(new RimWorld.StatModifier { stat = statDef, value = 1 });
-                    }
+                    trace.AppendLine($"* Adding default {statDef} stat");
+                    race.statBases.Add(new RimWorld.StatModifier { stat = statDef, value = 1 });
                 }
+            }
+        }
 
-                // tools - li Class CombatExtended.ToolCE / armorPenetration
-                var oldTools = race.tools.ToList();
-                foreach (var tool in oldTools)
+        private void ReplaceTools(AlienRace.ThingDef_AlienRace race)
+        {
+            // tools - li Class CombatExtended.ToolCE / armorPenetration
+            var oldTools = race.tools.ToList();
+            foreach (var tool in oldTools)
+            {
+                if (tool is ToolCE)
+                    continue;
+
+                trace.AppendLine($"* Replacing race tool {tool}");
+
+                var newTool = new ToolCE
                 {
-                    if (tool is ToolCE)
-                        continue;
+                    label = tool.label,
+                    untranslatedLabel = tool.untranslatedLabel,
 
-                    trace.AppendLine($"* Replacing race tool {tool}");
+                    alwaysTreatAsWeapon = tool.alwaysTreatAsWeapon,
+                    capacities = tool.capacities,
+                    chanceFactor = tool.chanceFactor,
+                    cooldownTime = tool.cooldownTime,
+                    ensureLinkedBodyPartsGroupAlwaysUsable = tool.ensureLinkedBodyPartsGroupAlwaysUsable,
+                    id = tool.id,
+                    labelUsedInLogging = tool.labelUsedInLogging,
+                    linkedBodyPartsGroup = tool.linkedBodyPartsGroup,
+                    power = tool.power,
+                    surpriseAttack = tool.surpriseAttack,
+                    hediff = tool.hediff,
 
-                    var newTool = new ToolCE
-                    {
-                        label = tool.label,
-                        capacities = tool.capacities,
-                        power = tool.power,
-                        cooldownTime = tool.cooldownTime,
-                        linkedBodyPartsGroup = tool.linkedBodyPartsGroup,
-                        armorPenetration = 0.10f,
-                    };
-                    trace.AppendLine("Initialized new tool");
+                    armorPenetration = 0.10f,
+                };
+                trace.AppendLine("Initialized new tool");
 
-                    race.tools.Remove(tool);
-                    trace.AppendLine("Removed existing tool");
+                race.tools.Remove(tool);
+                trace.AppendLine("Removed existing tool");
 
-                    race.tools.Add(newTool);
-                    trace.AppendLine($"Added new tool {newTool}");
-                }
+                race.tools.Add(newTool);
+                trace.AppendLine($"Added new tool {newTool}");
+            }
+        }
 
-                // comps element?
-                if (race.comps == null)
-                {
-                    trace.AppendLine("* Adding missing comps list");
-                    race.comps = new List<CompProperties>();
-                }
+        private void AddInventorySupport(AlienRace.ThingDef_AlienRace race)
+        {
+            // ThingDef/inspectorTabs/ li.ITab_Pawn_Gear -> li.CombatExtended.ITab_Inventory
+            if (race.inspectorTabs == null)
+            {
+                race.inspectorTabs = new List<Type>();
+            }
 
-                // compclass CombatExtended.CompPawnGizmo
-                if (!race.comps.Any(x => x.compClass == typeof(CompPawnGizmo)))
-                {
-                    trace.AppendLine("* Adding CompPawnGizmo to comps list");
+            var newInventoryTab = typeof(CombatExtended.ITab_Inventory);
 
-                    var gizmoProp = new CompProperties { compClass = typeof(CompPawnGizmo) };
-                    trace.AppendLine("Initialized gizmo prop");
+            var oldInventoryTab = race.inspectorTabs.FirstOrDefault(x => x.Name == "ITab_Pawn_Gear");
+            if (oldInventoryTab != null)
+            {
+                race.inspectorTabs.Remove(oldInventoryTab);
+            }
 
-                    race.comps.Add(gizmoProp);
-                    trace.AppendLine("Added gizmo to comps");
-                }
+            race.inspectorTabs.Add(newInventoryTab);
 
-                // CombatExtended.CompProperties_Suppressable
-                if (!race.comps.OfType<CompProperties_Suppressable>().Any())
-                {
-                    trace.AppendLine("* Adding supressable to comps list");
+            // ThingDef/comps/CombatExtended.CompProperties_Inventory
+            if (race.comps == null)
+            {
+                trace.AppendLine("* Adding missing comps list");
+                race.comps = new List<CompProperties>();
+            }
 
-                    var suppressableProps = new CompProperties_Suppressable();
-                    trace.AppendLine("Initialized supressable prop");
-
-                    race.comps.Add(suppressableProps);
-                    trace.AppendLine("Added supressable to comps");
-                }
+            if (!race.comps.Any(x => x.compClass == typeof(CombatExtended.CompProperties_Inventory)))
+            {
+                race.comps.Add(new CompProperties(typeof(CombatExtended.CompProperties_Inventory)));
             }
         }
     }
